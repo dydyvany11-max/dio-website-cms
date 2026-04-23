@@ -74,6 +74,48 @@ services:
       retries: 3
       start_period: 30s
 
+  backup:
+    build:
+      context: ./backup
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      BACKUP_SCHEDULE: '${BACKUP_SCHEDULE:-0 2 * * 0}'
+      RETENTION_DAYS: '${RETENTION_DAYS:-14}'
+      BACKUP_DB_PATH: '${BACKUP_DB_PATH:-/app/data/db.sqlite3}'
+      BACKUP_MEDIA_PATH: '${BACKUP_MEDIA_PATH:-/app/media}'
+      BACKUP_ROOT: '/backup'
+      RUN_BACKUP_ON_START: '${RUN_BACKUP_ON_START:-true}'
+    volumes:
+      - wagtail_db:/app/data:ro
+      - wagtail_media:/app/media:ro
+      - ./backups:/backup
+    depends_on:
+      web:
+        condition: service_healthy
+
+  backup_restore:
+    build:
+      context: ./backup
+      dockerfile: Dockerfile
+    profiles:
+      - tools
+    env_file:
+      - .env
+    environment:
+      BACKUP_DB_PATH: '${BACKUP_DB_PATH:-/app/data/db.sqlite3}'
+      BACKUP_MEDIA_PATH: '${BACKUP_MEDIA_PATH:-/app/media}'
+      BACKUP_ROOT: '/backup'
+    restart: "no"
+    command: >
+      sh -c "echo 'Использование: docker compose --profile tools run --rm backup_restore sh /usr/local/bin/restore.sh list'"
+    volumes:
+      - wagtail_db:/app/data
+      - wagtail_media:/app/media
+      - ./backups:/backup
+
 
 volumes:
   redis_data:
